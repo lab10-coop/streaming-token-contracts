@@ -6,7 +6,7 @@
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "truffle": "^5.0.18",
-    "web3": "^1.0.0-beta.52"
+    "web3": "^1.0.0-beta.55"
   },
   "devDependencies": {
     "token-test-suite": "^0.1.1"
