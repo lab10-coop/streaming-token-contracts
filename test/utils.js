@@ -56,7 +56,7 @@ async function fastForward(offset) {
 async function alignToSystemClock() {
     const gapMs = 1000 - new Date().getMilliseconds();
     if(gapMs < 500) {
-        console.log(`aligning to system clock - waiting ${gapMs}`);
+        //console.log(`aligning to system clock - waiting ${gapMs}`);
         await sleepMs(gapMs + 1);
         if(new Date().getMilliseconds() > 100) {
             console.log('WTF!');
@@ -112,17 +112,17 @@ async function mineBlockWithTS(ts) {
 }
 
 // creates an object containing txHash, blockNumber, blockTimestamp and the elements of the requested event
-function buildTxReturnObject(txRet, eventName) {
+async function buildTxReturnObject(txRet, eventName) {
     const o = {};
     o.txHash = txRet.tx;
     o.blockNumber = txRet.receipt.blockNumber;
-    o.blockTimestamp = web3.eth.getBlock(txRet.receipt.blockNumber).timestamp;
+    o.blockTimestamp = (await web3.eth.getBlock(txRet.receipt.blockNumber)).timestamp;
     o.gasUsed = txRet.receipt.cumulativeGasUsed;
     const event = txRet.logs.filter(e => e.event === eventName)[0];
     if (event) {
         Object.assign(o, event.args); // merge event into o
     }
-    // console.log(`buildTxReturnObject returns ${JSON.stringify(o)}`);
+    //console.log(`buildTxReturnObject returns ${JSON.stringify(o)}`);
     return o;
 }
 
@@ -134,10 +134,22 @@ function sleepMs(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// returns a Promise for an array of requested balances
-function getBalancesOf(accArr) {
-    return Promise.all(accArr.map(acc => contract.balanceOf(acc)));
-}
+prototypeMethods = {
+    // returns a Promise for an array of requested balances
+    getBalancesOf: function(accArr) {
+        return Promise.all(accArr.map(acc => this.balanceOf(acc)));
+    },
+
+    openStreamWrapper: async function(sender, receiver, flowrate) {
+        const ret = await this.openStream(receiver, flowrate, 0, { from: sender });
+        return await buildTxReturnObject(ret, 'StreamOpened');
+    },
+
+    closeStreamWrapper: async function(sender, streemId) {
+        const ret = await this.closeStream(streemId, {from: sender});
+        return await buildTxReturnObject(ret, 'StreamClosed');
+    }
+};
 
 
 module.exports = {
@@ -152,5 +164,5 @@ module.exports = {
     enableInstamine,
     mineBlockWithTS,
     mineBlock,
-    getBalancesOf
+    prototypeMethods
 };
