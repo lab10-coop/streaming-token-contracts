@@ -42,13 +42,6 @@ contract('SimpleERC20xxToken', (accounts) => {
     beforeEach(async () => {
         utils.enableInstamine();
         token = await TokenContract.new(INIT_BALANCE, 'Simple Tokens', 'STK', 1, {from: accounts[0]});
-
-        /*
-        // opens a streem and returns a promise to the open event it emitted
-        token.openStreamWrapper = async function(receiver, flowrate, maxAmount, opts) {
-            const ret = await token.openStream(receiver, flowrate, maxAmount, opts);
-            return utils.buildTxReturnObject(ret, 'StreamOpened');
-        }*/
     });
 
     it(`creation: should create an initial balance of ${INIT_BALANCE} for the creator`, async () => {
@@ -59,17 +52,35 @@ contract('SimpleERC20xxToken', (accounts) => {
         await token.openStreamWrapper(accounts[1], 1, 0, { from: accounts[0] });
     });
 
-    it('transfer correct amount (single stream)', async () => {
+    it('single stream behaves correctly)', async () => {
         const flowrate = 2;
         const duration = 4;
-        await token.openStream(accounts[1], flowrate, 0, { from: accounts[0] });
+        const s = await token.openStreamWrapper(accounts[1], flowrate, 0, { from: accounts[0] });
         await utils.fastForward(duration);
-        //await utils.mineBlockWithTS(await utils.getLastBlockTimestamp() + duration);
 
-        const [ bal0, bal1 ] = await token.getBalancesOf([accounts[0], accounts[1]]);
+        let [ bal0, bal1 ] = await token.getBalancesOf([accounts[0], accounts[1]]);
 
         assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate*duration);
         assert.strictEqual(bal1.toNumber(), flowrate*duration);
+
+        await token.closeStream(s.id, { from: accounts[0]});
+        [ bal0, bal1 ] = await token.getBalancesOf([accounts[0], accounts[1]]);
+        assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate*duration);
+        assert.strictEqual(bal1.toNumber(), flowrate*duration);
+    });
+
+    it('no unauthorized closing of stream possible)', async () => {
+        const flowrate = 2;
+        const s = await token.openStreamWrapper(accounts[1], flowrate, 0, { from: accounts[0] });
+
+        await utils.assertRevert(token.closeStream(s.id, { from: accounts[2] }));
+    });
+
+    it('receiver can close stream)', async () => {
+        const flowrate = 2;
+        const s = await token.openStreamWrapper(accounts[1], flowrate, 0, { from: accounts[0] });
+
+        await token.closeStream(s.id, { from: accounts[1] });
     });
 
     /*
@@ -81,58 +92,86 @@ contract('SimpleERC20xxToken', (accounts) => {
         const flowrate2 = 1;
         const duration = 4;
 
-        //await utils.mineBlock();
-//        const t0 = await utils.getLastBlockTimestamp() + 1;
-//        await utils.disableInstamine();
-        await Promise.all([
-            token.openStream(accounts[1], flowrate1, 0, { from: accounts[0] }),
-            token.openStream(accounts[2], flowrate2, 0, { from: accounts[1] }),
+        const [ s1, s2 ] = await Promise.all([
+            token.openStreamWrapper(accounts[1], flowrate1, 0, { from: accounts[0] }),
+            token.openStreamWrapper(accounts[2], flowrate2, 0, { from: accounts[1] }),
         ]);
-        await utils.disableInstamine();
         await utils.fastForward(duration);
 
-        //const t0 = await utils.getLastBlockTimestamp();
-//        console.log(`last block: ${JSON.stringify(await web3.eth.getBlock(await web3.eth.getBlockNumber()), null, 2)}`);
-
-
-        //const tx1 = token.openStream(accounts[1], flowrate1, 0, { from: accounts[0] });
-        //utils.sleep(1);
-        /*await utils.mineBlockWithTS(t0);
-        console.log(`last block: ${JSON.stringify(await web3.eth.getBlock(await web3.eth.getBlockNumber()), null, 2)}`);
-        await utils.mineBlockWithTS(t0);
-        console.log(`last block: ${JSON.stringify(await web3.eth.getBlock(await web3.eth.getBlockNumber()), null, 2)}`);
-        await openProms;*/
-
-        //await openProms;
-        //utils.sleep(1);
-
-        //const t1 = t0 + duration;
-        //await utils.mineBlockWithTS(t1);
-//        console.log(`last block: ${JSON.stringify(await web3.eth.getBlock(await web3.eth.getBlockNumber()), null, 2)}`);
-        //await tx1;
-
-        //const t1 = await utils.fastForward(duration);
-        //const bn = await web3.eth.getBlockNumber();
-
-        //console.log(`t0: ${t0}, t1: ${t1}, bn: ${bn}`);
-
-        //await utils.slowForward(1);
-
-        const [ bal0, bal1, bal2 ] = await token.getBalancesOf([accounts[0], accounts[1], accounts[2]]);
-        console.log(`time: ${new Date().getMilliseconds()}`);
-        /*
-        const bal0 = await token.balanceOf.call(accounts[0]);
-        utils.setChainTimestamp(t1);
-        const bal1 = await token.balanceOf(accounts[1]);
-        utils.setChainTimestamp(t1);
-        const bal2 = await token.balanceOf(accounts[2]);
-        */
-
-        console.log(`bal0 ${bal0.toNumber()}, bal1 ${bal1.toNumber()}, bal2 ${bal2.toNumber()}`);
+        let [ bal0, bal1, bal2 ] = await token.getBalancesOf([accounts[0], accounts[1], accounts[2]]);
 
         assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate1*duration);
         assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1*duration - flowrate2*duration));
         assert.strictEqual(bal2.toNumber(), Math.min(flowrate1*duration, flowrate2*duration));
-        //console.log(``)
+
+        // check: same state after closing
+        await token.closeStream(s1.id, { from: accounts[0]});
+        await token.closeStream(s2.id, { from: accounts[1]});
+
+        [ bal0, bal1, bal2 ] = await token.getBalancesOf([accounts[0], accounts[1], accounts[2]]);
+
+        assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate1*duration);
+        assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1*duration - flowrate2*duration));
+        assert.strictEqual(bal2.toNumber(), Math.min(flowrate1*duration, flowrate2*duration));
+    });
+
+    /*
+     * a0 -> a1 --> a2
+     * expected result: a0-, a=, a2+
+     */
+    it('underfunded stream behaves correctly', async () => {
+        const flowrate1 = 1;
+        const flowrate2 = 2;
+        const duration = 4;
+
+        const [ s1, s2 ] = await Promise.all([
+            token.openStreamWrapper(accounts[1], flowrate1, 0, { from: accounts[0] }),
+            token.openStreamWrapper(accounts[2], flowrate2, 0, { from: accounts[1] }),
+        ]);
+        await utils.fastForward(duration);
+
+        let [ bal0, bal1, bal2 ] = await token.getBalancesOf([accounts[0], accounts[1], accounts[2]]);
+
+        assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate1*duration);
+        assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1*duration - flowrate2*duration));
+        assert.strictEqual(bal2.toNumber(), Math.min(flowrate1*duration, flowrate2*duration));
+
+        // check: same state after closing
+        await token.closeStream(s1.id, { from: accounts[0]});
+        await token.closeStream(s2.id, { from: accounts[1]});
+        [ bal0, bal1, bal2 ] = await token.getBalancesOf([accounts[0], accounts[1], accounts[2]]);
+
+        assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate1*duration);
+        assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1*duration - flowrate2*duration));
+        assert.strictEqual(bal2.toNumber(), Math.min(flowrate1*duration, flowrate2*duration));
+    });
+
+    /*
+     * a0 --> a1 -> a0
+     * expected result: a0-, a1+
+     */
+    it('circular streams behave correctly', async () => {
+        const flowrate1 = 2;
+        const flowrate2 = 1;
+        const duration = 4;
+
+        const [ s1, s2 ] = await Promise.all([
+            token.openStreamWrapper(accounts[1], flowrate1, 0, { from: accounts[0] }),
+            token.openStreamWrapper(accounts[0], flowrate2, 0, { from: accounts[1] }),
+        ]);
+        await utils.fastForward(duration);
+
+        let [ bal0, bal1 ] = await token.getBalancesOf([accounts[0], accounts[1]]);
+
+        assert.strictEqual(bal0.toNumber(), Math.min(INIT_BALANCE, INIT_BALANCE - flowrate1*duration + flowrate2*duration));
+        assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1*duration - flowrate2*duration));
+
+        // check: same state after closing
+        await token.closeStream(s1.id, { from: accounts[0]});
+        await token.closeStream(s2.id, { from: accounts[1]});
+        [ bal0, bal1 ] = await token.getBalancesOf([accounts[0], accounts[1]]);
+
+        assert.strictEqual(bal0.toNumber(), Math.min(INIT_BALANCE, INIT_BALANCE - flowrate1*duration + flowrate2*duration));
+        assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1*duration - flowrate2*duration));
     });
 });

@@ -121,7 +121,7 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         outStreamPtrs[msg.sender] = streamId;
         inStreamPtrs[to] = streamId;
 
-        emit StreamOpened(msg.sender, to, flowrate, maxAmount);
+        emit StreamOpened(streamId, msg.sender, to, flowrate, maxAmount);
         return streamId;
     }
 

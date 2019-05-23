@@ -2,6 +2,18 @@
 Supported only by testrpc / ganache.
 @returns the timestamp of the newly mined block */
 
+async function assertRevert(promise) {
+    try {
+        await promise;
+    } catch (error) {
+        // TODO: is there a sane way to recognize the failure reason?
+//      const revertFound = error.message.search('Error') >= 0;
+//      assert(revertFound, `Expected "revert", got ${error} instead`);
+        return;
+    }
+    assert.fail('Expected revert not received');
+}
+
 async function getLastBlockTimestamp() {
     return (await web3.eth.getBlock(await web3.eth.getBlockNumber())).timestamp;
 }
@@ -35,8 +47,21 @@ async function unsafefastForward(time_s) {
 
 async function fastForward(offset) {
     const t0 = await getLastBlockTimestamp();
+    await alignToSystemClock();
     await mineBlockWithTS(t0 + offset);
     return t0 + offset;
+}
+
+// if the system clock is about to switch second (<500 ms offset), this waits until the switch happens
+async function alignToSystemClock() {
+    const gapMs = 1000 - new Date().getMilliseconds();
+    if(gapMs < 500) {
+        console.log(`aligning to system clock - waiting ${gapMs}`);
+        await sleepMs(gapMs + 1);
+        if(new Date().getMilliseconds() > 100) {
+            console.log('WTF!');
+        }
+    }
 }
 
 // sets the time of the chain. Doesn't produce a block!
@@ -105,6 +130,10 @@ function sleep(s) {
     return new Promise(resolve => setTimeout(resolve, s * 1000));
 }
 
+function sleepMs(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // returns a Promise for an array of requested balances
 function getBalancesOf(accArr) {
     return Promise.all(accArr.map(acc => contract.balanceOf(acc)));
@@ -112,6 +141,7 @@ function getBalancesOf(accArr) {
 
 
 module.exports = {
+    assertRevert,
     getLastBlockTimestamp,
     fastForward,
     slowForward,
