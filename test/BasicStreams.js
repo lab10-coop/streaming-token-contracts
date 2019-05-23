@@ -9,7 +9,7 @@ contract('BasicStreams', (accounts) => {
 
     require('./eip20').test(web3, accounts, BasicStreams);
 
-    describe('Streaming', function() {
+    describe('ERC20xx', function() {
         let contract;
 
         const sheikh = accounts[0];
@@ -88,11 +88,6 @@ contract('BasicStreams', (accounts) => {
         // CAUTION! Do not expect tests to pass after changes here as several cases are hardcoded to match this numbers!
         const OPEN_INITIAL_FUNDS = 1000;
         const DECONCENTRATOR_INITIAL_FUNDS = 10000;
-
-        it('get total supply', async () => {
-            const curSup = await contract.totalSupply();
-            assert.equal(curSup, INIT_BALANCE);
-        });
 
         it('static transfers', async () => {
             contract.transfer(open1, OPEN_INITIAL_FUNDS, {from: sheikh});

@@ -36,11 +36,11 @@ TokenContract.prototype.getBalancesOf = async function(accArr) {
 
 console.log(`version: ${web3.version}`);
 
-contract('SimpleERC20xxToken', (accounts) => {
+contract('SimpleStreams', (accounts) => {
 
     require('./eip20').test(web3, accounts, TokenContract);
 
-    describe('Streaming', function() {
+    describe('ERC20xx', function() {
         const INIT_BALANCE = 10000;
 
         beforeEach(async () => {
@@ -52,7 +52,7 @@ contract('SimpleERC20xxToken', (accounts) => {
             await token.openStreamWrapper(accounts[1], 1, 0, {from: accounts[0]});
         });
 
-        it('single stream behaves correctly)', async () => {
+        it('single stream behaves correctly', async () => {
             const flowrate = 2;
             const duration = 4;
             const s = await token.openStreamWrapper(accounts[1], flowrate, 0, {from: accounts[0]});
@@ -69,14 +69,14 @@ contract('SimpleERC20xxToken', (accounts) => {
             assert.strictEqual(bal1.toNumber(), flowrate * duration);
         });
 
-        it('no unauthorized closing of stream possible)', async () => {
+        it('no unauthorized closing of stream possible', async () => {
             const flowrate = 2;
             const s = await token.openStreamWrapper(accounts[1], flowrate, 0, {from: accounts[0]});
 
             await utils.assertRevert(token.closeStream(s.id, {from: accounts[2]}));
         });
 
-        it('receiver can close stream)', async () => {
+        it('receiver can close stream', async () => {
             const flowrate = 2;
             const s = await token.openStreamWrapper(accounts[1], flowrate, 0, {from: accounts[0]});
 
