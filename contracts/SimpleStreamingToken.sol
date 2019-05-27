@@ -10,6 +10,7 @@ import { IERC20xx } from "./IERC20xx.sol";
  * - allows only streams with unrestricted amount (maxAmount set to zero)
  * - the maximum flowrate is 1E66 - this prevents stream balance overflows even for streams running for 100+ years
  * - may not allow an account to open a stream if the graph of dependent incoming streams is too large
+ * TODO: handle unlimited flowrate
  *
  * No explicit overflow checks are done. Shouldn't be required with totalSupply limited to 2^255 -1 (TODO: double check)
  */
@@ -34,7 +35,6 @@ contract SimpleStreamingToken is IERC20, IERC20xx {
         address sender;
         address receiver;
         uint256 flowrate; // flowrate in tokens (smallest unit) per second
-        uint256 maxAmount; // max amount this stream can transfer
         uint256 startTS; // start timestamp (in seconds - same unit as block timestamps)
     }
 
@@ -43,7 +43,7 @@ contract SimpleStreamingToken is IERC20, IERC20xx {
      * Closed streams result in "empty holes" (entries with all fields set to their null value).
      * Since the contract never needs to iterate over this array, it can keep growing forever.
      */
-    Stream[] public streams;
+    Stream[] streams;
 
     // map of outgoing stream (identified by stream id) per account
     mapping(address => uint256) outStreamPtrs;
@@ -65,7 +65,7 @@ contract SimpleStreamingToken is IERC20, IERC20xx {
         decimals = _decimals;
 
         // empty first element for implicit null-like semantics (sentinel entry)
-        streams.push(Stream(address(0), address(0), 0, 0, 0));
+        streams.push(Stream(address(0), address(0), 0, 0));
     }
 
     // ################## ERC20 interface ##################
@@ -92,8 +92,7 @@ contract SimpleStreamingToken is IERC20, IERC20xx {
         return allowed[_owner][_spender];
     }
 
-    // ERC-20 compliant function for discrete transfers
-    // TODO: the standard seems to require bool return value
+    // atomic transfers
     function transfer(address _to, uint256 _value) external returns (bool) {
         require(balanceOf(msg.sender) >= _value);
 
@@ -129,18 +128,18 @@ contract SimpleStreamingToken is IERC20, IERC20xx {
         return CanOpenResult.OK;
     }
 
-    function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(int256 streamId) {
+    function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(uint256 streamId) {
         CanOpenResult ret = canOpenStream(msg.sender, to, flowrate, maxAmount);
         if(ret != CanOpenResult.OK) {
             revert(); // we could return the error code, needs a map for the strings
         }
 
-        uint256 id = streams.push(Stream(msg.sender, to, flowrate, maxAmount, block.timestamp)) - 1; // id = array_length - 1
-        outStreamPtrs[msg.sender] = id;
-        inStreamPtrs[to] = id;
+        streamId = streams.push(Stream(msg.sender, to, flowrate, block.timestamp)) - 1; // id = array_length - 1
+        outStreamPtrs[msg.sender] = streamId;
+        inStreamPtrs[to] = streamId;
 
-        emit StreamOpened(id, msg.sender, to, flowrate, maxAmount);
-        return int256(id);
+        emit StreamOpened(streamId, msg.sender, to, flowrate, maxAmount);
+        return streamId;
     }
 
     function closeStream(uint256 streamId) external {

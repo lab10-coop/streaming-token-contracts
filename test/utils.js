@@ -145,8 +145,8 @@ prototypeMethods = {
         return await buildTxReturnObject(ret, 'StreamOpened');
     },
 
-    closeStreamWrapper: async function(sender, streemId) {
-        const ret = await this.closeStream(streemId, {from: sender});
+    closeStreamWrapper: async function(sender, streamId) {
+        const ret = await this.closeStream(streamId, {from: sender});
         return await buildTxReturnObject(ret, 'StreamClosed');
     }
 };

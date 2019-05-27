@@ -3,7 +3,7 @@ pragma solidity >=0.4.25 <0.6.0;
 interface IERC20xx {
     enum CanOpenResult {
         OK,
-        ERR_SENDER_RECEIVER_TUPLE,
+        ERR_SENDER_RECEIVER_TUPLE, // TODO: find better name
         ERR_SENDER_QUOTA,
         ERR_RECEIVER_QUOTA,
         ERR_SYSTEM_LIMIT,
@@ -15,7 +15,7 @@ interface IERC20xx {
     enum TransferType { UNDEFINED, ATOMIC, STREAM }
 
     function canOpenStream(address from, address to, uint256 flowrate, uint256 maxAmount) external view returns(CanOpenResult);
-    function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(int256);
+    function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(uint256);
     function getStreamInfo(uint256 streamId) external view returns(uint256 startTS, address sender, address receiver, uint256 flowrate, uint256 maxAmount, uint256 transferredAmount, uint256 outstandingAmount);
     function closeStream(uint256 streamId) external;
 

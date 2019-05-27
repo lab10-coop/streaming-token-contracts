@@ -1,7 +1,7 @@
 // this is a copy of https://github.com/ConsenSys/Tokens/blob/master/test/eip20/eip20.js
 // with some adaptations (e.g. compatibility with more recent version of web3)
 
-const { assertRevert } = require('./helpers/assertRevert');
+const { assertRevert } = require('./utils');
 
 //const EIP20Abstraction = artifacts.require('SimpleERC20xxToken');
 
