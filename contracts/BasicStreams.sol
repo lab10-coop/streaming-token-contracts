@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.6.0;
+pragma solidity >=0.4.25 <0.6.0;
 
 import { IERC20 } from "./IERC20.sol";
 import { IERC20xx } from "./IERC20xx.sol";

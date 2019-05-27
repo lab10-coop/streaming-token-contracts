@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity >=0.4.25 <0.6.0;
 
 interface IERC20xx {
     function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(uint256);
