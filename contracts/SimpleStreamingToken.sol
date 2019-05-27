@@ -11,9 +11,9 @@ import { IERC20xx } from "./IERC20xx.sol";
  * - the maximum flowrate is 1E66 - this prevents stream balance overflows even for streams running for 100+ years
  * - may not allow an account to open a stream if the graph of dependent incoming streams is too large
  *
- * No explicit overflow checks are done. Shouldn't be required with totalSupply limited to 2^255 -1 (not sure about that)
+ * No explicit overflow checks are done. Shouldn't be required with totalSupply limited to 2^255 -1 (TODO: double check)
  */
-contract SimpleERC20xxToken is IERC20, IERC20xx {
+contract SimpleStreamingToken is IERC20, IERC20xx {
     uint256 public totalSupply;
     string public name;
     string public symbol;
@@ -21,27 +21,38 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
 
     mapping (address => mapping (address => uint256)) internal allowed;
 
-    // map of the static component of account balances
+    /*
+     * map of the static component of account balances.
+     * Using a signed int makes it easier to use only one storage slot
+     * That's because the static component can become negative (when an outgoing stream which is fed by an incoming one
+     * is closed first).
+     */
     mapping (address => int256) internal staticBalances;
 
+    // TODO: consider using smaller uint types in order to reduce storage related gas costs (struct packing)
     struct Stream {
         address sender;
         address receiver;
         uint256 flowrate; // flowrate in tokens (smallest unit) per second
+        uint256 maxAmount; // max amount this stream can transfer
         uint256 startTS; // start timestamp (in seconds - same unit as block timestamps)
     }
 
-    // Array of all streams. Closed streams result in "empty holes" (entries with all fields set to their null value)
+    /*
+     * Array of all streams. New streams are pushed to this array, the index becoming their unique "stream id".
+     * Closed streams result in "empty holes" (entries with all fields set to their null value).
+     * Since the contract never needs to iterate over this array, it can keep growing forever.
+     */
     Stream[] public streams;
 
-    // map of outgoing stream (identified by index) per account
+    // map of outgoing stream (identified by stream id) per account
     mapping(address => uint256) outStreamPtrs;
 
-    // map of incoming stream (identified by index) per account
+    // map of incoming stream (identified by stream id) per account
     mapping(address => uint256) inStreamPtrs;
 
-    //event StreamOpened(address indexed _from, address indexed _to, uint256 _perSecond);
-    event StreamClosed(address indexed _from, address indexed _to, uint256 _perSecond, uint256 _settledBalance, uint256 _outstandingBalance);
+    // max size of a sub-graph of connected streams. Avoids stack overflows
+    uint constant public MAX_RECURSION_DEPTH = 100;
 
     constructor(uint256 _initialSupply, string memory _name, string memory _symbol, uint8 _decimals) public {
         // this implementation limits totalSupply to 2^255 because of internal usage of int data type
@@ -53,15 +64,13 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         symbol = _symbol;
         decimals = _decimals;
 
-        streams.push(Stream(address(0),address(0),0,0)); // empty first element for implicit null-like semantics
+        // empty first element for implicit null-like semantics (sentinel entry)
+        streams.push(Stream(address(0), address(0), 0, 0, 0));
     }
 
     // ################## ERC20 interface ##################
 
-    function transferFrom(address _from, address _to, uint256 _value)
-        public
-        returns (bool)
-    {
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool) {
         require(_to != address(0));
         require(_value <= balanceOf(_from));
         require(_value <= allowed[_from][msg.sender]);
@@ -69,24 +78,17 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         staticBalances[_from] -= int(_value);
         staticBalances[_to] += int(_value);
         allowed[_from][msg.sender] -= _value;
-        emit Transfer(_from, _to, _value);
+        emit Transfer(_from, _to, _value, TransferType.ATOMIC);
         return true;
     }
 
-    function approve(address _spender, uint256 _value)
-        public
-        returns (bool)
-    {
+    function approve(address _spender, uint256 _value) public returns (bool) {
         allowed[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
         return true;
     }
 
-    function allowance(address _owner, address _spender)
-        public
-        view
-        returns (uint256)
-    {
+    function allowance(address _owner, address _spender) public view returns (uint256) {
         return allowed[_owner][_spender];
     }
 
@@ -97,7 +99,7 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
 
         staticBalances[msg.sender] -= int(_value);
         staticBalances[_to] += int(_value);
-        emit Transfer(msg.sender, _to, _value);
+        emit Transfer(msg.sender, _to, _value, TransferType.ATOMIC);
         return true;
     }
 
@@ -107,22 +109,38 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
 
     // ################## ERC20xx interface ###################
 
-    uint constant public MAX_RECURSION_DEPTH = 100;
+    function canOpenStream(address from, address to, uint256 flowrate, uint256 maxAmount) public view returns(CanOpenResult) {
+        if(exists(getOutStreamOf(from))) {
+            return CanOpenResult.ERR_SENDER_QUOTA;
+        }
+        if(exists(getInStreamOf(to))) {
+            return CanOpenResult.ERR_RECEIVER_QUOTA;
+        }
+        if(getRecursionDepth(from) >= MAX_RECURSION_DEPTH) {
+            return CanOpenResult.ERR_SYSTEM_LIMIT;
+        }
+        if(flowrate > 1E66) {
+            return CanOpenResult.ERR_FLOWRATE;
+        }
+        if(maxAmount > 0) {
+            return CanOpenResult.ERR_MAXAMOUNT;
+        }
 
-    function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(uint256 streamId) {
-        require(maxAmount == 0, "maxAmount limited");
-        require(flowrate < 1E66, "flowrate too high");
-        require(! exists(getOutStreamOf(msg.sender)), "already has outgoing stream");
-        require(! exists(getInStreamOf(to)), "already has incoming stream");
-        // this prevents states which become too expensive to calculate.
-        require(getRecursionDepth(msg.sender) < MAX_RECURSION_DEPTH);
+        return CanOpenResult.OK;
+    }
 
-        streamId = streams.push(Stream(msg.sender, to, flowrate, block.timestamp)) - 1; // id = array_length - 1
-        outStreamPtrs[msg.sender] = streamId;
-        inStreamPtrs[to] = streamId;
+    function openStream(address to, uint256 flowrate, uint256 maxAmount) external returns(int256 streamId) {
+        CanOpenResult ret = canOpenStream(msg.sender, to, flowrate, maxAmount);
+        if(ret != CanOpenResult.OK) {
+            revert(); // we could return the error code, needs a map for the strings
+        }
 
-        emit StreamOpened(streamId, msg.sender, to, flowrate, maxAmount);
-        return streamId;
+        uint256 id = streams.push(Stream(msg.sender, to, flowrate, maxAmount, block.timestamp)) - 1; // id = array_length - 1
+        outStreamPtrs[msg.sender] = id;
+        inStreamPtrs[to] = id;
+
+        emit StreamOpened(id, msg.sender, to, flowrate, maxAmount);
+        return int256(id);
     }
 
     function closeStream(uint256 streamId) external {
@@ -134,7 +152,8 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         staticBalances[s.sender] -= int(transferredAmount);
         staticBalances[s.receiver] += int(transferredAmount);
 
-        emit StreamClosed(s.sender, s.receiver, s.flowrate, transferredAmount, outstandingAmount);
+        emit Transfer(s.sender, s.receiver, transferredAmount, TransferType.STREAM);
+        emit StreamClosed(streamId, transferredAmount, outstandingAmount);
 
         // make sure this remains the last statement because it invalidates the pointer s
         delete streams[streamId];
@@ -151,8 +170,9 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         return (s.startTS, s.sender, s.receiver, s.flowrate, 0, transferredAmount, outstandingAmount);
     }
 
-    // ################## Internal functions ###################
+    // ################## Internal constant functions ###################
 
+    // returns the overall balance of the given account
     function accountBalance(address _owner) internal view returns (uint256) {
         Stream storage inS = getInStreamOf(_owner);
         uint256 inStreamBal = exists(inS) ? streamBalance(inS, inS, 1) : 0;
@@ -165,12 +185,10 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         return uint(staticBalances[_owner] + int(inStreamBal) - int(outStreamBal));
     }
 
-    // ################## Internal constant functions ###################
-
-    // returns the amount transferred so far and the outstanding amount (positive in case of lacking sender funds)
+    // returns the amount transferred so far and the outstanding amount (non-zero in case of lacking sender funds)
     function getStreamStatus(Stream storage s) internal view returns (uint256, uint256){
         uint256 bal = streamBalance(s, s, 1);
-        uint256 naiveBal = naiveStreamBalance(s); // remember before manipulating the stream
+        uint256 naiveBal = naiveStreamBalance(s);
 
         return (bal, naiveBal - bal);
     }
@@ -192,7 +210,9 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         return depth;
     }
 
-    // Solidity (so far) has no simple null check, using startTS as guard (assuming we'll not overflow back to 1970).
+    // checks if the given stream exists (is open).
+    // does so by looking at the startTS timestamp which is always non-zero for open streams and zero for closed ones.
+    // TODO: isOpen may be a better name
     function exists(Stream storage s) internal view returns (bool) {
         return s.startTS != 0;
     }
@@ -210,36 +230,43 @@ contract SimpleERC20xxToken is IERC20, IERC20xx {
         return streams[inStreamPtrs[addr]];
     }
 
+    // returns true if the two Stream objects are the same.
+    // This implementation depends on the constraints of the contract (only one in/out stream per account)
     function equals(Stream storage s1, Stream storage s2) internal view returns (bool) {
+        /*
+         * The == operator isn't implemented on storage pointers, thus this somewhat hacky implementation.
+         * And alternative could be to use assembly code (eq instruction) - I didn't test that.
+         * It should be enough to compare only sender, but comparing both feels safer.
+         */
         return s1.sender == s2.sender && s1.receiver == s2.receiver;
     }
 
-    // returns the naive "should be" balance of a stream, ignoring the possibility of it running out of funds
+    // returns the "naive" balance of a stream, ignoring the possibility of the sender running out of funds
     function naiveStreamBalance(Stream storage s) internal view returns (uint256) {
         return (block.timestamp - s.startTS) * s.flowrate;
     }
 
     /*
-     * returns the "real" (based on sender solvency) balance of a stream.
+     * returns the "real" (taking into account sender solvency) balance of a stream.
      * This takes the perspective of the sender, making the stream under investigation an outgoingStream.
      * Implements min(outgoingStreamBalance, staticBalance + incomingStreamBalance).
      * Since the balance of the incoming stream may also depend on incoming streams on the sender side,
-     * we potentially need recursive invocation here.
-     * The method for opening new streams is responsible for limiting recursion depth.
-     * This implementation is also able to detect and correctly handle cyclical dependencies.
+     * this method can recurse. When recursing, it will detect and properly handle cycles.
+     * Has no protection against hitting the stack limit; it's the responsibility of methods which open streams
+     * to not allow unsafe contract states -> recursion depths.
      */
     function streamBalance(Stream storage s, Stream storage origin, uint256 hops) internal view returns (uint256) {
-        // naming: osb -> outgoingStreamBalance, isb -> incomingStreamBalance, sb -> static balance
+        // naming: osb -> outgoingStreamBalance, isb -> incomingStreamBalance, sb -> staticBalance
         uint256 osb = naiveStreamBalance(s);
         if (equals(s, origin) && hops > 1) {
-            // special case: stop when detecting a cycle
+            // special case: cycle detected, stopping here
             return osb;
         } else {
             Stream storage inS = getInStreamOf(s.sender);
             uint256 isb = exists(inS) ? streamBalance(inS, origin, hops + 1) : 0;
             int sb = staticBalances[s.sender];
             require(sb + int(isb) >= 0);
-            return min(osb, uint56(sb + int(isb)));
+            return min(osb, uint256(sb + int(isb)));
         }
     }
 }

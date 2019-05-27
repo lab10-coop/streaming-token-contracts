@@ -16,7 +16,7 @@
  */
 
 
-const TokenContract = artifacts.require('SimpleERC20xxToken');
+const TokenContract = artifacts.require('SimpleStreamingToken');
 
 const utils = require('./utils');
 
@@ -36,7 +36,7 @@ TokenContract.prototype.getBalancesOf = async function(accArr) {
 
 console.log(`version: ${web3.version}`);
 
-contract('SimpleStreams', (accounts) => {
+contract('SimpleStreamingToken', (accounts) => {
 
     require('./eip20').test(web3, accounts, TokenContract);
 
@@ -67,6 +67,21 @@ contract('SimpleStreams', (accounts) => {
             [bal0, bal1] = await token.getBalancesOf([accounts[0], accounts[1]]);
             assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate * duration);
             assert.strictEqual(bal1.toNumber(), flowrate * duration);
+        });
+
+        it('funds of open stream can be transferred right away', async () => {
+            const flowrate = 2;
+            const duration = 4;
+            const s = await token.openStreamWrapper(accounts[1], flowrate, 0, {from: accounts[0]});
+            await utils.fastForward(duration);
+
+            // forward full amount received through stream to a third account
+            await token.transfer(accounts[2], flowrate*duration, {from: accounts[1]});
+
+            const [bal0, bal1, bal2] = await token.getBalancesOf([accounts[0], accounts[1], accounts[2]]);
+            assert.strictEqual(bal0.toNumber(), INIT_BALANCE - flowrate * duration);
+            assert.strictEqual(bal1.toNumber(), 0);
+            assert.strictEqual(bal2.toNumber(), flowrate*duration);
         });
 
         it('no unauthorized closing of stream possible', async () => {
@@ -174,5 +189,13 @@ contract('SimpleStreams', (accounts) => {
             assert.strictEqual(bal0.toNumber(), Math.min(INIT_BALANCE, INIT_BALANCE - flowrate1 * duration + flowrate2 * duration));
             assert.strictEqual(bal1.toNumber(), Math.max(0, flowrate1 * duration - flowrate2 * duration));
         });
+
+        /*
+         * TODO: add tests for
+         * - enforcement of max recursion depth
+         * - canOpenStream()
+         * - getStreamInfo()
+         * - correct type value in Transfer events
+         */
     });
 });
