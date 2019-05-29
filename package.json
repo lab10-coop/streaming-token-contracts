@@ -4,6 +4,9 @@
   "description": "Reference implementations of Streamable Tokens",
   "author": "git.dho@lab10.coop",
   "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "node_modules/.bin/truffle test"
+  },
   "dependencies": {
     "truffle": "^5.0.18",
     "web3": "^1.0.0-beta.55"
