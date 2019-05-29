@@ -20,7 +20,7 @@ interface IERC20xx {
     function closeStream(uint256 streamId) external;
 
     // overrides ERC20 event, adding a field "_type"
-    event Transfer(address indexed _from, address indexed _to, uint256 _value, TransferType _type);
+    event Transfer(address indexed from, address indexed to, uint256 value, TransferType transferType);
     event StreamOpened(uint256 id, address indexed from, address indexed to, uint256 flowrate, uint256 maxAmount);
     event StreamClosed(uint256 id, uint256 transferredAmount, uint256 outstandingAmount);
 }
