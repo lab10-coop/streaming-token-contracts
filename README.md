@@ -1,6 +1,6 @@
 ## About
 
-This repository contains example implementations of Streamable Tokens (TODO: link to proposed standard).  
+This repository contains example implementations of Streaming Tokens (TODO: link to proposed standard).  
 
 ## Background
 
@@ -17,34 +17,42 @@ After listening to Andreas Antonopolous [talking about Streaming Money](https://
 Over time, the idea was shared with people around me and eventually also [presented at SWARM Orange Summit 2018](https://www.youtube.com/watch?v=4C_Djl78dqM).  
 The idea met a lot of interest, but it also proved to be difficult to explain, because the concept of continuous money-like transfers which don't rely on _some_ kind of settlements - as in payment channel based micro-transactions - seems to be hard to grasp.  
 
-Thus we at lab10 focused on building a bit more than raw contracts in order to allow for a more intuitive understanding, based on interaction with Streamable Tokens:
+Thus we at lab10 focused on building a bit more than raw contracts in order to allow for a more intuitive understanding, based on interaction with Streaming Tokens (TODO: add links):
 * A web wallet which supports atomic and continuous transfers
-* A Hackathon project which uses Streamable Tokens for operating an oldschool music player
-* A demonstration for a research project where Streamable Tokens are used to pay for charging of an electric car
-(TODO: add links)
+* A Hackathon project which uses Streaming Tokens for operating an oldschool music player ([blog article](https://medium.com/lab10-collective/lab10-wins-infineon-blockchain-hackathon-and-streams-music-over-artis-mainnet-5fff84ffd140))
+* A demonstration for a research project where Streaming Tokens are used to pay for charging of an electric car
 
 We also thought about how to add streaming functionality to existing assets.  
-In 2018 we even wanted to modify the Ethereum protocol such that the blockchain native token would be streamable, to be used for the ARTIS blockchain.  
-That attempt was abandoned, because the utility of a streamable native token was not so clear (compared to e.g. the utility of stable tokens) and because adding that level of complexity at the core protocol level turned out to be something we didn't feel comfortable doing.   
+In 2018 we even started to modify the Parity implementation of the Ethereum protocol such that the blockchain native token would be streamable, to be used for the ARTIS blockchain.  
+That attempt was abandoned, because the utility of a streamable native token was not so clear (compared to e.g. the utility of stable tokens) and because adding that level of complexity at the core protocol level turned out to be something we didn't feel comfortable doing with the resources at hand.   
 
 Instead we figured out that token bridges were a great opportunity for adding streaming functionality to tokens. (TODO: publish and link)  
 This allows token bridges to sidechains to add streaming functionality to any bridged token (or even to ETH).
 
-## Simple Streamable Token
+## Simple Streaming Token
+
+Contract code in `contracts/SimpleStreamingToken.sol`  
+Tests in `SimpleStreamingToken.js`
 
 This implementation is based on the [first PoC](https://github.com/lab10-coop/streem-poc), but updated for Solidity v5 and adapted to the proposed interface.  
-Look into the contract file for a list of constraints. 
+It allows any account to open a stream to any other account. Main limitation: only one sending and one receiving stream per account allowed.    
+For more details, look into the contract source file. 
 
-## Basic Streamable Token
+## Basic Streaming Token
 
-This implements a set of restrictions we came up with after long discussions about how to deal with the challenge of possible infinite recursions.  
+Contract code in `contracts/BasicStreamingToken.sol`  
+Tests in `BasicStreamingToken.js`
+
+This implements a set of restrictions we came up with after many conversations about how to deal with the challenge of possible infinite recursions.  
 It starts from the premise that continuous transfers are usually needed for subscription-type relations and that subscriptions typically involve many-to one relations - meaning that somebody offering a subscription service may want to have a receiver account which can receive many streaming transfers at the same time, but doesn't necessarily need outgoing streams.  
-The design implies that new instances of such a token contract don't allow any streams at all. Only after at least one account is set to a different _account type_ can streams be opened.  
-This is the kind of implementation we are using for Streamable bridged Tokens.
+The design implies that a newly deployed instances of such a token contract don't allow any streams to be opened at all. At least one account needs to be set as having a non-default `account type` beforehand by its owner invoking the method `setAccountType`.     
+This represents an example for an interface extended by implementation specific methods.
+  
+This is the kind of implementation we are using for Streaming Bridged Tokens on ARTIS (TODO: link).
 
 ## Running
 
-Requires node v10.  
+Requires node v10.
 
 Install with `npm install`.  
 Run tests with `npm test`.
