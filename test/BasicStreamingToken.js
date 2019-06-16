@@ -9,7 +9,7 @@ contract('BasicStreamingToken', (accounts) => {
 
     require('./eip20').test(web3, accounts, BasicStreams);
 
-    describe('ERC20xx', function() {
+    describe('ERC2100', function() {
         let contract;
 
         const sheikh = accounts[0];

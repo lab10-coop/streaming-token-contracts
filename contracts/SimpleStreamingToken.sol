@@ -1,7 +1,7 @@
 pragma solidity >=0.4.25 <0.6.0;
 
 import { IERC20 } from "./IERC20.sol";
-import { IERC20xx } from "./IERC20xx.sol";
+import {IERC2100} from "./IERC2100.sol";
 
 /**
  * Implementation of a Streamable ERC20 Token with the following properties:
@@ -14,7 +14,7 @@ import { IERC20xx } from "./IERC20xx.sol";
  *
  * No explicit overflow checks are done. Shouldn't be required with totalSupply limited to 2^255 -1 (TODO: double check)
  */
-contract SimpleStreamingToken is IERC20, IERC20xx {
+contract SimpleStreamingToken is IERC20, IERC2100 {
     uint256 public totalSupply;
     string public name;
     string public symbol;
@@ -106,7 +106,7 @@ contract SimpleStreamingToken is IERC20, IERC20xx {
         return accountBalance(_owner);
     }
 
-    // ################## ERC20xx interface ###################
+    // ################## ERC2100 interface ###################
 
     function canOpenStream(address from, address to, uint256 flowrate, uint256 maxAmount) public view returns(CanOpenResult) {
         if(exists(getOutStreamOf(from))) {

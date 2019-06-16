@@ -3,10 +3,6 @@
 
 const { assertRevert } = require('./utils');
 
-//const EIP20Abstraction = artifacts.require('SimpleERC20xxToken');
-
-//contract('EIP20', (accounts) => {
-
 exports.test = function(web3, accounts, ERC20CompatibleToken) {
     describe('ERC20', function() {
         const BN = web3.utils.BN;

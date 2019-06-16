@@ -1,6 +1,6 @@
 pragma solidity >=0.4.25 <0.6.0;
 
-interface IERC20xx {
+interface IERC2100 {
     enum CanOpenResult {
         OK,
         ERR_SENDER_RECEIVER_TUPLE, // TODO: find better name

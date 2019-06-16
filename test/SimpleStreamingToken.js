@@ -40,7 +40,7 @@ contract('SimpleStreamingToken', (accounts) => {
 
     require('./eip20').test(web3, accounts, TokenContract);
 
-    describe('ERC20xx', function() {
+    describe('ERC2100', function() {
         const INIT_BALANCE = 10000;
 
         beforeEach(async () => {
