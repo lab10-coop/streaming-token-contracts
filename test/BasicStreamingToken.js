@@ -3,7 +3,6 @@
 const BasicStreams = artifacts.require('BasicStreamingToken.sol');
 const utils = require('./utils');
 const BN = web3.utils.BN;
-const should = require('should'); // eslint-disable-line
 
 contract('BasicStreamingToken', (accounts) => {
 
@@ -20,19 +19,15 @@ contract('BasicStreamingToken', (accounts) => {
         const deconcentrator1 = accounts[5];
         const deconcentrator2 = accounts[6];
 
-        const DEFAULT = 0; // set by default
-        const CONCENTRATOR = 1;
-        const DECONCENTRATOR = 2;
+        const ACC_TYPE_DEFAULT = 0; // set by default
+        const ACC_TYPE_CONCENTRATOR = 1;
+        const ACC_TYPE_DECONCENTRATOR = 2;
 
         const INIT_BALANCE = 1000000;
 
         BasicStreams.prototype.getBalancesOf = utils.prototypeMethods.getBalancesOf;
         BasicStreams.prototype.openStreamWrapper = utils.prototypeMethods.openStreamWrapper;
         BasicStreams.prototype.closeStreamWrapper = utils.prototypeMethods.closeStreamWrapper;
-        /*
-        async function(accArr) {
-        return Promise.all(accArr.map(acc => this.balanceOf(acc)));
-    };*/
 
         beforeEach(async function () {
             contract = await BasicStreams.new(INIT_BALANCE, "Basic Test Token", "BTT", 1);
@@ -44,25 +39,14 @@ contract('BasicStreamingToken', (accounts) => {
 
             // set 2 accounts as concentrator and 2 as deconcentrator (the others remain open accounts)
             await Promise.all([
-                contract.setAccountType(CONCENTRATOR, {from: concentrator1}),
-                contract.setAccountType(CONCENTRATOR, {from: concentrator2}),
-                contract.setAccountType(DECONCENTRATOR, {from: deconcentrator1}),
-                contract.setAccountType(DECONCENTRATOR, {from: deconcentrator2}),
+                contract.setAccountType(ACC_TYPE_CONCENTRATOR, {from: concentrator1}),
+                contract.setAccountType(ACC_TYPE_CONCENTRATOR, {from: concentrator2}),
+                contract.setAccountType(ACC_TYPE_DECONCENTRATOR, {from: deconcentrator1}),
+                contract.setAccountType(ACC_TYPE_DECONCENTRATOR, {from: deconcentrator2}),
             ]);
         });
 
         // =========== HELPERS ===========
-
-
-        // take a snapshot to which we can return later and return the id
-        function takeSnapshot() {
-            return;
-        }
-
-        // revert to the snapshot with the given id. Returns true on success
-        function revertToSnapshot(id) {
-            return;
-        }
 
         // batch opens multiple streams and returns a promise to the open event it emitted
         async function openMultipleStreamsWrapper(sender, receivers, flowrate) {
@@ -95,23 +79,9 @@ contract('BasicStreamingToken', (accounts) => {
             contract.transfer(deconcentrator2, DECONCENTRATOR_INITIAL_FUNDS, {from: sheikh});
         });
 
-        /*
-        let snapshotAfterInit = 0;
-        it('configure accounts (type)', async () => {
-            await Promise.all([
-                setAccountToType(concentrator1, CONCENTRATOR),
-                setAccountToType(concentrator2, CONCENTRATOR),
-                setAccountToType(deconcentrator1, DECONCENTRATOR),
-                setAccountToType(deconcentrator2, DECONCENTRATOR) ]);
-
-            // take a snapshot to which we can revert later
-            snapshotAfterInit = takeSnapshot();
-        });
-        */
-
         it('check random account type', async () => {
             const accType = await contract.getAccountType({from: deconcentrator2});
-            assert.equal(accType.toNumber(), DECONCENTRATOR);
+            assert.equal(accType.toNumber(), ACC_TYPE_DECONCENTRATOR);
         });
 
         /*
@@ -127,7 +97,6 @@ contract('BasicStreamingToken', (accounts) => {
             const flowrate = 1;
             const duration = 100;
             const stream1Open = await contract.openStreamWrapper(default1, concentrator1, 1);
-            // const snapshotSingleStream = takeSnapshot();
 
             let lastBlockTs = await utils.fastForward(duration);
             let [balDefault1, balConcentrator1] = await contract.getBalancesOf([default1, concentrator1]);
@@ -303,6 +272,26 @@ contract('BasicStreamingToken', (accounts) => {
             assert(balDefault1.toNumber() >= 5 * 100);
             assert.equal((balDefault1.add(balDeconcentrator1).add(balConcentrator1)).toNumber(), DECONCENTRATOR_INITIAL_FUNDS + 1000);
         });
+
+        it('enforce the limit of open incoming streams for Open Account', async () => {
+            const maxIncomingStreams = await contract.DEFAULT_ACCOUNT_MAX_INCOMING_STREAMS({from: default1});
+            const maxOutgoingStreams = await contract.DEFAULT_ACCOUNT_MAX_OUTGOING_STREAMS({from: default1});
+
+            const streams = [];
+            for(let i=0; i<maxIncomingStreams; i++) {
+                streams.push(await contract.openStreamWrapper(deconcentrator1, default1, 1));
+            }
+
+            //assert.isRejected(contract.openStreamWrapper(deconcentrator1, default1, 1),
+            //    "opening more streams than allowed to open accounts should fail");
+            utils.assertRevert(contract.openStreamWrapper(deconcentrator1, default1, 1));
+
+            // after closing one, we should be able to open one more
+            await contract.closeStreamWrapper(deconcentrator1, streams[4].id);
+
+            await contract.openStreamWrapper(deconcentrator1, default1, 1);
+        });
+
 
         /*
          * TODO: missing tests
