@@ -18,9 +18,9 @@ Over time, the idea was shared with people around me and eventually also [presen
 The idea met a lot of interest, but it also proved to be difficult to explain, because the concept of continuous money-like transfers which don't rely on _some_ kind of settlements - as in payment channel based micro-transactions - seems to be hard to grasp.  
 
 Thus we at lab10 focused on building a bit more than raw contracts in order to allow for a more intuitive understanding, based on interaction with Streaming Tokens (TODO: add links):
-* A web wallet which supports atomic and continuous transfers
+* A web wallet which supports atomic and continuous transfers ([example deployment](http://sfau.tau1.artis.network/#0x30B125d5Fc58c1b8E3cCB2F1C71a1Cc847f024eE) - currently not working in Firefox)
 * A Hackathon project which uses Streaming Tokens for operating an oldschool music player ([blog article](https://medium.com/lab10-collective/lab10-wins-infineon-blockchain-hackathon-and-streams-music-over-artis-mainnet-5fff84ffd140))
-* A demonstration for a research project where Streaming Tokens are used to pay for charging of an electric car
+* A demonstration for a research project where Streaming Tokens are used to pay for charging of an electric car ([video](https://www.youtube.com/watch?v=Er9ifHvKPBM))
 
 We also thought about how to add streaming functionality to existing assets.  
 In 2018 we even started to modify the Parity implementation of the Ethereum protocol such that the blockchain native token would be streamable, to be used for the ARTIS blockchain.  
