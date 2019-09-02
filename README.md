@@ -1,6 +1,6 @@
 ## About
 
-This repository contains example implementations of Streaming Tokens (TODO: link to proposed standard).  
+This repository contains example implementations of the **Streaming Token Standard** proposed in [EIP-2100](https://github.com/ethereum/EIPs/issues/2100).
 
 ## Background
 
